@@ -8,6 +8,12 @@ set -uo pipefail
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 HOME_DIR="$CLAUDE_DIR/sync-memory"
 FLAG="$HOME_DIR/.update-available"
+STAMP="$HOME_DIR/.last-update-check"
+
+# SessionStart stamps the clock before launching us, so a storm of background gits is
+# impossible. The cost is that a check which never got to run still burns the whole week.
+# Rewind the clock on a failure that might not repeat, so the next session tries again.
+retry_next_time() { rm -f "$STAMP"; exit 0; }
 
 SRC="$(python3 -c "
 import json
@@ -19,11 +25,15 @@ command -v git >/dev/null || exit 0
 [ -n "$SRC" ] || exit 0
 git -C "$SRC" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
-git -C "$SRC" fetch --quiet 2>/dev/null || exit 0
+# Offline, or a repository that has moved: worth another go rather than a week of silence.
+git -C "$SRC" fetch --quiet 2>/dev/null || retry_next_time
 
 LOCAL="$(git -C "$SRC" rev-parse HEAD 2>/dev/null || echo x)"
 REMOTE="$(git -C "$SRC" rev-parse '@{u}' 2>/dev/null || echo x)"
-[ "$LOCAL" = "x" ] || [ "$REMOTE" = "x" ] && exit 0
+if [ "$LOCAL" = "x" ] || [ "$REMOTE" = "x" ]; then
+    # No upstream to compare against - a detached HEAD, usually. Not a transient fault.
+    exit 0
+fi
 
 if [ "$LOCAL" != "$REMOTE" ]; then
     BEHIND="$(git -C "$SRC" rev-list --count HEAD..'@{u}' 2>/dev/null || echo "")"

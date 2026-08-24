@@ -38,7 +38,22 @@ fi
 if [ "$LOCAL" != "$REMOTE" ]; then
     BEHIND="$(git -C "$SRC" rev-list --count HEAD..'@{u}' 2>/dev/null || echo "")"
     if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ] 2>/dev/null; then
-        echo "an update is available ($BEHIND new commits)" > "$FLAG"
+        # A version number tells the user something; "5 new commits" does not. Read the
+        # changelog off the fetched branch without touching the working copy.
+        HAVE="$(python3 -c "
+import json,sys
+try: print(json.load(open('$HOME_DIR/config.json',encoding='utf-8')).get('version',''))
+except Exception: print('')
+" 2>/dev/null)"
+        THERE="$(git -C "$SRC" show '@{u}':CHANGELOG.md 2>/dev/null \
+            | bash "$SRC/lib/changelog.sh" - 0.0.0 --version-only 2>/dev/null || true)"
+        if [ -n "$THERE" ] && [ -n "$HAVE" ] && [ "$THERE" != "$HAVE" ]; then
+            echo "version $THERE is out, you have $HAVE" > "$FLAG"
+        elif [ -n "$THERE" ]; then
+            echo "version $THERE is out" > "$FLAG"
+        else
+            echo "an update is available ($BEHIND new commits)" > "$FLAG"
+        fi
     fi
 else
     rm -f "$FLAG"

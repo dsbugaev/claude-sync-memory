@@ -81,13 +81,19 @@ PY
 # ------------------------------------------------------------------ update ---
 do_update() {
   b "Updating Claude Sync Memory"
-  local src
+  local src was
   src="$(python3 -c "
 import json,sys
 try: print(json.load(open('$CONFIG',encoding='utf-8')).get('src',''))
 except Exception: print('')
 " 2>/dev/null)"
   [ -z "$src" ] && src="$SRC_DIR"
+  # The installed version, captured before the pull overwrites it.
+  was="$(python3 -c "
+import json,sys
+try: print(json.load(open('$CONFIG',encoding='utf-8')).get('version',''))
+except Exception: print('')
+" 2>/dev/null)"
 
   if git -C "$src" rev-parse --git-dir >/dev/null 2>&1; then
     dim "source: $src (git)"
@@ -97,6 +103,19 @@ except Exception: print('')
   fi
   # Reinstall with the saved answers.
   SYNC_MEMORY_REINSTALL=1 bash "$src/install.sh" --yes
+
+  # What changed, read from the changelog that just arrived. Printed last, because that is
+  # where the eye lands after a wall of install output.
+  if [ -n "$was" ] && [ -f "$src/CHANGELOG.md" ] && [ -f "$src/lib/changelog.sh" ]; then
+    NEWS="$(bash "$src/lib/changelog.sh" "$src/CHANGELOG.md" "$was" 2>/dev/null || true)"
+    if [ -n "$NEWS" ]; then
+      echo
+      b "New since $was"
+      printf '%s\n' "$NEWS"
+    else
+      dim "Already on the newest version ($was)."
+    fi
+  fi
   exit 0
 }
 

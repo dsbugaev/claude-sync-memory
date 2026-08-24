@@ -400,6 +400,54 @@ if ! skipping; then
     assert_eq "" "$(ring gone "$TMP/nowhere.jsonl")"
 fi
 
+# ================================================================= changelog ===
+group "the changelog reader"
+if ! skipping; then
+    CL="$SRC/lib/changelog.sh"
+    F="$TMP/CHANGELOG.md"
+    cat > "$F" <<'EOF'
+# Changelog
+
+## 2.0.0 - 2026-01-03
+
+- big one
+
+## 1.10.0 - 2026-01-02
+
+- ten beats two
+
+## 1.2.0 - 2026-01-01
+
+- older
+EOF
+
+    it "returns only what came after the version you have"
+    OUT="$(bash "$CL" "$F" 1.2.0)"
+    assert_contains "$OUT" "2.0.0"
+
+    it "leaves out what you already have"
+    assert_not_contains "$OUT" "1.2.0 - 2026"
+
+    it "orders by number, not by string - 1.10 is newer than 1.2"
+    assert_contains "$(bash "$CL" "$F" 1.2.0)" "1.10.0"
+
+    it "says nothing when you are already current"
+    assert_eq "" "$(bash "$CL" "$F" 2.0.0)"
+
+    it "names the newest version for the one-line notice"
+    assert_eq "2.0.0" "$(bash "$CL" "$F" 0.0.0 --version-only)"
+
+    it "reads from stdin, so the remote copy can be checked without pulling it"
+    assert_eq "2.0.0" "$(cat "$F" | bash "$CL" - 0.0.0 --version-only)"
+
+    it "survives a heading that is not a version"
+    printf '\n## Unreleased\n\n- wip\n' >> "$F"
+    assert_contains "$(bash "$CL" "$F" 1.2.0)" "2.0.0"
+
+    it "the shipped changelog parses and knows the current version"
+    assert_eq "$(cat "$SRC/VERSION")" "$(bash "$CL" "$SRC/CHANGELOG.md" 0.0.0 --version-only)"
+fi
+
 # ==================================================================== report ===
 printf '\n'
 if [ "$FAIL" -eq 0 ]; then

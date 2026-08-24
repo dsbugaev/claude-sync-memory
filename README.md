@@ -123,11 +123,15 @@ in the code.
 ## Updating
 
 With the update check on, once a week it quietly looks for a newer version and, at session
-start, prints a line offering to update. It never installs anything by itself.
+start, prints a line naming it: "version 0.6.0 is out, you have 0.5.0". It never installs
+anything by itself.
 
 ```bash
 bash install.sh --update
 ```
+
+Updating prints everything released since the version you had, straight from
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Removing
 

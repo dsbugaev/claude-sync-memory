@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Claude Sync Memory - установка памяти между сессиями для Claude Code.
+# Claude Sync Memory - installs cross-session memory for Claude Code.
 #
-#   bash install.sh              интерактивная настройка (рекомендуется)
-#   bash install.sh --yes        поставить все с дефолтами, без вопросов
-#   bash install.sh --update     обновиться до свежей версии и переустановить
-#   bash install.sh --uninstall  снять все, что ставили
+#   bash install.sh              interactive setup (recommended)
+#   bash install.sh --yes        install everything with defaults, no questions
+#   bash install.sh --update     pull the latest version and reinstall
+#   bash install.sh --uninstall  remove everything this installed
 #
-# Ставится в профиль из CLAUDE_CONFIG_DIR (по умолчанию ~/.claude).
+# Installs into the profile from CLAUDE_CONFIG_DIR (~/.claude by default).
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ END_HOOK="$CLAUDE_DIR/scripts/sync-memory-session-end.sh"
 START_HOOK="$CLAUDE_DIR/scripts/sync-memory-session-start.sh"
 GUARD_HOOK="$CLAUDE_DIR/hooks/context-guard.py"
 
-# Дефолты; интерактивный режим их переспросит.
+# Defaults; interactive mode asks about each of them.
 DO_MEMORY=1
 DO_QUEUE=1
 DO_GUARD=1
@@ -37,11 +37,11 @@ dim() { printf '\033[2m%s\033[0m\n' "$*"; }
 ok() { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*"; }
 
-command -v python3 >/dev/null || { echo "Нужен python3. На macOS: xcode-select --install" >&2; exit 1; }
+command -v python3 >/dev/null || { echo "python3 is required. On macOS: xcode-select --install" >&2; exit 1; }
 
-# ---------------------------------------------------------------- удаление ---
+# --------------------------------------------------------------- uninstall ---
 uninstall() {
-  b "Снимаю Claude Sync Memory из $CLAUDE_DIR"
+  b "Removing Claude Sync Memory from $CLAUDE_DIR"
   python3 - "$SETTINGS" <<'PY'
 import json, os, shutil, sys
 path = sys.argv[1]
@@ -51,7 +51,7 @@ shutil.copy(path, path + ".bak-sync-memory")
 try:
     s = json.load(open(path, encoding="utf-8"))
 except Exception:
-    print("  ! settings.json невалиден, руками почисти секцию hooks", file=sys.stderr)
+    print("  ! settings.json is not valid JSON, clean the hooks section by hand", file=sys.stderr)
     sys.exit(0)
 marks = ("sync-memory-session-end", "sync-memory-session-start", "context-guard.py")
 hooks = s.get("hooks", {})
@@ -67,20 +67,20 @@ if not hooks:
 else:
     s["hooks"] = hooks
 json.dump(s, open(path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
-print("  ✓ хуки убраны из settings.json (бэкап рядом: .bak-sync-memory)")
+print("  ✓ hooks removed from settings.json (backup alongside: .bak-sync-memory)")
 PY
   rm -f "$CMD_FILE" "$AGENT_FILE" "$END_HOOK" "$START_HOOK" "$GUARD_HOOK"
   rm -rf "$HOME_DIR"
-  ok "файлы удалены"
-  dim "Сами файлы памяти не тронуты - они в $CLAUDE_DIR/projects/*/memory/"
+  ok "files deleted"
+  dim "Your memory files are untouched - they live in $CLAUDE_DIR/projects/*/memory/"
   echo
-  b "Готово. Начни новую сессию Claude Code."
+  b "Done. Start a new Claude Code session."
   exit 0
 }
 
-# ------------------------------------------------------------- обновление ---
+# ------------------------------------------------------------------ update ---
 do_update() {
-  b "Обновление Claude Sync Memory"
+  b "Updating Claude Sync Memory"
   local src
   src="$(python3 -c "
 import json,sys
@@ -90,12 +90,12 @@ except Exception: print('')
   [ -z "$src" ] && src="$SRC_DIR"
 
   if git -C "$src" rev-parse --git-dir >/dev/null 2>&1; then
-    dim "источник: $src (git)"
-    git -C "$src" pull --ff-only --quiet && ok "исходники обновлены" || warn "git pull не прошел, ставлю что есть"
+    dim "source: $src (git)"
+    git -C "$src" pull --ff-only --quiet && ok "sources updated" || warn "git pull failed, installing what is on disk"
   else
-    warn "источник не git-репозиторий - обновляю из $src как есть"
+    warn "source is not a git repository - installing from $src as is"
   fi
-  # Переустановка с сохраненными ответами.
+  # Reinstall with the saved answers.
   SYNC_MEMORY_REINSTALL=1 bash "$src/install.sh" --yes
   exit 0
 }
@@ -109,7 +109,7 @@ NONINTERACTIVE=0
 [ "${1:-}" = "--yes" ] && NONINTERACTIVE=1
 [ -t 0 ] || NONINTERACTIVE=1
 
-# Переустановка после обновления - забираем прошлые ответы.
+# Reinstall after an update - pick up the previous answers.
 if [ -f "$CONFIG" ]; then
   eval "$(python3 - "$CONFIG" <<'PY'
 import json, sys, shlex
@@ -130,40 +130,41 @@ PY
 )"
 fi
 
-# --------------------------------------------------------- диалог настройки ---
-ask() {  # ask "вопрос" "да|нет по умолчанию (y/n)" -> 0/1
+# ------------------------------------------------------------- setup dialog ---
+ask() {  # ask "question" "default (y/n)" -> 0/1
   local q="$1" def="$2" a
   if [ "$NONINTERACTIVE" = "1" ]; then [ "$def" = "y" ] && return 0 || return 1; fi
   local hint="[Y/n]"; [ "$def" = "n" ] && hint="[y/N]"
   read -r -p "  $q $hint " a </dev/tty || a=""
   a="$(printf '%s' "$a" | tr '[:upper:]' '[:lower:]')"
   [ -z "$a" ] && a="$def"
+  # Russian "yes" is accepted too - the first users type it out of habit.
   case "$a" in y|yes|д|да) return 0 ;; *) return 1 ;; esac
 }
 
 echo
 b "Claude Sync Memory $VERSION"
-dim "Память между сессиями Claude Code: решения, договоренности, твои предпочтения"
-dim "переезжают в файлы и подхватываются в следующих сессиях сами."
+dim "Cross-session memory for Claude Code: decisions, agreements and your preferences"
+dim "move into files and are picked up by later sessions on their own."
 echo
-dim "Профиль установки: $CLAUDE_DIR"
+dim "Installing into: $CLAUDE_DIR"
 echo
 
 if [ "$NONINTERACTIVE" = "1" ]; then
-  dim "Неинтерактивный режим - ставлю с текущими настройками, вопросов не будет."
+  dim "Non-interactive mode - installing with the current settings, no questions."
   echo
 else
-  b "1. Что поставить"
-  ask "Память сессий: команда /sync-memory и агент memory-keeper?" y && DO_MEMORY=1 || DO_MEMORY=0
-  ask "Очередь сессий: напоминать на старте, что есть неразобранные?" y && DO_QUEUE=1 || DO_QUEUE=0
-  ask "Сторож контекста: предупреждать, когда диалог разросся?" y && DO_GUARD=1 || DO_GUARD=0
+  b "1. What to install"
+  ask "Session memory: the /sync-memory command and the memory-keeper agent?" y && DO_MEMORY=1 || DO_MEMORY=0
+  ask "Session queue: remind you at startup that some are unprocessed?" y && DO_QUEUE=1 || DO_QUEUE=0
+  ask "Context guard: warn you when a conversation has grown large?" y && DO_GUARD=1 || DO_GUARD=0
   echo
 fi
 
-# --- пороги контекста считаем по его же сессиям, а не берем с потолка ---
+# --- derive the thresholds from the user's own sessions instead of guessing ---
 if [ "$DO_GUARD" = "1" ] && [ "$NONINTERACTIVE" != "1" ]; then
-  b "2. Пороги сторожа контекста"
-  dim "Смотрю, насколько большими выходят твои сессии..."
+  b "2. Context guard thresholds"
+  dim "Measuring how large your sessions usually get..."
   STATS="$(python3 - "$CLAUDE_DIR" <<'PY'
 import glob, json, os, sys
 peaks = []
@@ -200,68 +201,68 @@ PY
 )"
   if [ -n "$STATS" ]; then
     read -r S_N S_MED S_P90 S_MAX <<< "$STATS"
-    dim "  посмотрел $S_N сессий: медиана $S_MED, p90 $S_P90, максимум $S_MAX токенов"
+    dim "  looked at $S_N sessions: median $S_MED, p90 $S_P90, max $S_MAX tokens"
   else
-    dim "  сессий пока мало - беру значения по умолчанию"
+    dim "  not enough sessions yet - using the defaults"
   fi
-  dim "  Дефолт: мягкое предупреждение на ${WARN}, настойчивое на ${HARD}."
-  if ask "Оставить эти пороги?" y; then :; else
-    read -r -p "  мягкое предупреждение, токенов [$WARN]: " a </dev/tty || a=""
+  dim "  Defaults: gentle warning at ${WARN}, insistent one at ${HARD}."
+  if ask "Keep these thresholds?" y; then :; else
+    read -r -p "  gentle warning, tokens [$WARN]: " a </dev/tty || a=""
     [ -n "$a" ] && WARN="$a"
-    read -r -p "  настойчивое, токенов [$HARD]: " a </dev/tty || a=""
+    read -r -p "  insistent one, tokens [$HARD]: " a </dev/tty || a=""
     [ -n "$a" ] && HARD="$a"
   fi
   echo
 fi
 
 if [ "$DO_QUEUE" = "1" ] && [ "$NONINTERACTIVE" != "1" ]; then
-  b "3. Папки-исключения"
-  dim "Есть папки, по которым память вести не надо (личные заметки, чужие репозитории)?"
-  dim "Через двоеточие, можно со звездочкой. Пример: \$HOME/notes/*:\$HOME/secret*"
-  read -r -p "  исключения [${EXCLUDE:-нет}]: " a </dev/tty || a=""
+  b "3. Excluded folders"
+  dim "Any folders to keep no memory for (private notes, other people's repositories)?"
+  dim "Colon-separated, wildcards allowed. Example: \$HOME/notes/*:\$HOME/secret*"
+  read -r -p "  exclusions [${EXCLUDE:-none}]: " a </dev/tty || a=""
   [ -n "$a" ] && EXCLUDE="$a"
   echo
 fi
 
 if [ "$NONINTERACTIVE" != "1" ]; then
-  b "4. Обновления"
-  ask "Проверять раз в неделю, не вышла ли новая версия?" y && DO_UPDATES=1 || DO_UPDATES=0
+  b "4. Updates"
+  ask "Check once a week whether a new version is out?" y && DO_UPDATES=1 || DO_UPDATES=0
   echo
 fi
 
-# --------------------------------------------------------------- установка ---
-b "Ставлю"
+# ------------------------------------------------------------------ install ---
+b "Installing"
 mkdir -p "$CLAUDE_DIR/commands" "$CLAUDE_DIR/agents" "$CLAUDE_DIR/scripts" "$CLAUDE_DIR/hooks" "$HOME_DIR"
 
 if [ "$DO_MEMORY" = "1" ]; then
   cp "$SRC_DIR/commands/sync-memory.md" "$CMD_FILE"
   cp "$SRC_DIR/agents/memory-keeper.md" "$AGENT_FILE"
-  ok "команда /sync-memory и агент memory-keeper"
+  ok "the /sync-memory command and the memory-keeper agent"
 fi
 
 if [ "$DO_QUEUE" = "1" ]; then
   cp "$SRC_DIR/hooks/session-end.sh" "$END_HOOK"
   cp "$SRC_DIR/hooks/session-start.sh" "$START_HOOK"
   chmod +x "$END_HOOK" "$START_HOOK"
-  ok "очередь сессий"
+  ok "session queue"
 fi
 
 if [ "$DO_GUARD" = "1" ]; then
   sed -e "s/__WARN__/$WARN/" -e "s/__HARD__/$HARD/" "$SRC_DIR/hooks/context-guard.py" > "$GUARD_HOOK"
   chmod +x "$GUARD_HOOK"
-  ok "сторож контекста (пороги $WARN / $HARD)"
+  ok "context guard (thresholds $WARN / $HARD)"
 fi
 
-# Затравка файла памяти для домашней директории.
+# Seed the memory index for the home directory.
 if [ "$DO_MEMORY" = "1" ]; then
   MUNGED="$(printf '%s' "$HOME" | sed 's/[\/.]/-/g')"
   MEM_DIR="$CLAUDE_DIR/projects/$MUNGED/memory"
   mkdir -p "$MEM_DIR"
   [ -f "$MEM_DIR/MEMORY.md" ] || cp "$SRC_DIR/templates/MEMORY.md" "$MEM_DIR/MEMORY.md"
-  ok "папка памяти: $MEM_DIR"
+  ok "memory folder: $MEM_DIR"
 fi
 
-# --- settings.json: аккуратный merge, чужие ключи и хуки не трогаем ---
+# --- settings.json: careful merge, other keys and hooks stay untouched ---
 python3 - "$SETTINGS" "$DO_QUEUE" "$DO_GUARD" "$END_HOOK" "$START_HOOK" "$GUARD_HOOK" "$EXCLUDE" <<'PY'
 import json, os, shutil, sys
 path, do_queue, do_guard, end_h, start_h, guard_h, exclude = sys.argv[1:8]
@@ -271,7 +272,7 @@ if os.path.exists(path):
     try:
         s = json.load(open(path, encoding="utf-8"))
     except Exception:
-        print("  ! settings.json невалиден - почини его и запусти установку заново", file=sys.stderr)
+        print("  ! settings.json is not valid JSON - fix it and run the install again", file=sys.stderr)
         sys.exit(1)
 
 def put(event, matcher, cmd, timeout):
@@ -281,12 +282,12 @@ def put(event, matcher, cmd, timeout):
             if os.path.basename(cmd) in h.get("command", ""):
                 h["command"] = cmd
                 h["timeout"] = timeout
-                return "обновлен"
+                return "updated"
     entry = {"hooks": [{"type": "command", "command": cmd, "timeout": timeout}]}
     if matcher is not None:
         entry["matcher"] = matcher
     groups.append(entry)
-    return "подключен"
+    return "added"
 
 msgs = []
 if do_queue == "1":
@@ -305,20 +306,20 @@ elif isinstance(s.get("env"), dict):
 os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 json.dump(s, open(path, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 for m in msgs:
-    print("  ✓ хук " + m)
+    print("  ✓ hook " + m)
 if os.path.exists(path + ".bak-sync-memory"):
-    print("  ✓ бэкап настроек: %s.bak-sync-memory" % os.path.basename(path))
+    print("  ✓ settings backup: %s.bak-sync-memory" % os.path.basename(path))
 PY
 
-# Исходники к себе - чтобы --update и --uninstall работали без скачанной папки.
+# Keep a copy of the sources so --update and --uninstall work without the download.
 if [ "$SRC_DIR" != "$HOME_DIR" ]; then
   rm -rf "$HOME_DIR/src"
   mkdir -p "$HOME_DIR/src"
   (cd "$SRC_DIR" && tar cf - --exclude .git . 2>/dev/null) | (cd "$HOME_DIR/src" && tar xf -)
 fi
 
-# Источник для --update: если ставили из git-чекаута, обновляемся из него,
-# иначе из собственной копии (ее обновить можно только руками).
+# Source for --update: a git checkout updates from itself, anything else falls back
+# to our own copy (which can only be refreshed by hand).
 if git -C "$SRC_DIR" rev-parse --git-dir >/dev/null 2>&1; then
   CFG_SRC="$SRC_DIR"
 else
@@ -337,14 +338,14 @@ json.dump({
 PY
 
 if [ "$DO_UPDATES" = "1" ]; then
-  ok "еженедельная проверка обновлений включена"
+  ok "weekly update check enabled"
 else
   rm -f "$HOME_DIR/.update-available" "$HOME_DIR/.last-update-check"
 fi
 
-# ------------------------------------------------------------ самопроверка ---
+# --------------------------------------------------------------- self-check ---
 echo
-b "Проверяю"
+b "Checking"
 if [ "$DO_GUARD" = "1" ]; then
   LATEST="$(ls -t "$CLAUDE_DIR"/projects/*/*.jsonl 2>/dev/null | head -1 || true)"
   if [ -n "$LATEST" ]; then
@@ -352,24 +353,24 @@ if [ "$DO_GUARD" = "1" ]; then
       | CLAUDE_CONTEXT_WARN=1 CLAUDE_CONTEXT_STEP=1 python3 "$GUARD_HOOK" 2>/dev/null || true)"
     rm -f "$CLAUDE_DIR/cache/context-guard-selftest" "$HOME/.claude/cache/context-guard-selftest"
     case "$OUT" in
-      *systemMessage*) ok "сторож контекста отвечает" ;;
-      *) warn "сторож промолчал - бывает на совсем свежем транскрипте, не страшно" ;;
+      *systemMessage*) ok "context guard responds" ;;
+      *) warn "guard stayed quiet - happens on a brand new transcript, nothing to worry about" ;;
     esac
   else
-    dim "  транскриптов еще нет, сторожа проверю в следующий раз"
+    dim "  no transcripts yet, will check the guard next time"
   fi
 fi
-{ [ "$DO_MEMORY" = "1" ] && [ -f "$CMD_FILE" ] && ok "команда /sync-memory на месте"; } || true
-{ [ "$DO_QUEUE" = "1" ] && [ -x "$END_HOOK" ] && ok "хук очереди исполняемый"; } || true
-python3 -c "import json;json.load(open('$SETTINGS',encoding='utf-8'))" 2>/dev/null && ok "settings.json валиден" || warn "settings.json не читается - проверь его"
+{ [ "$DO_MEMORY" = "1" ] && [ -f "$CMD_FILE" ] && ok "/sync-memory command in place"; } || true
+{ [ "$DO_QUEUE" = "1" ] && [ -x "$END_HOOK" ] && ok "queue hook is executable"; } || true
+python3 -c "import json;json.load(open('$SETTINGS',encoding='utf-8'))" 2>/dev/null && ok "settings.json is valid" || warn "settings.json cannot be read - check it"
 
 echo
-b "Готово."
-dim "Начни новую сессию Claude Code - хуки подхватываются при старте, перезапуск приложения не нужен."
+b "Done."
+dim "Start a new Claude Code session - hooks load at session start, no app restart needed."
 echo
-echo "  Как пользоваться:"
-echo "    /sync-memory   - разобрать сессию и записать в память"
+echo "  How to use it:"
+echo "    /sync-memory   - process the session and write it into memory"
 echo
-echo "  Обновиться:  bash $HOME_DIR/src/install.sh --update"
-echo "  Снять:       bash $HOME_DIR/src/install.sh --uninstall"
+echo "  Update:     bash $HOME_DIR/src/install.sh --update"
+echo "  Uninstall:  bash $HOME_DIR/src/install.sh --uninstall"
 echo

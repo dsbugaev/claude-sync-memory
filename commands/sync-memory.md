@@ -1,47 +1,50 @@
 ---
-description: Обновить файлы памяти по текущей или прошлым сессиям
+description: Update memory files from the current session, or from past ones in the queue
 ---
 
-Запусти субагента `memory-keeper`, чтобы он обновил файлы памяти по текущей сессии.
+Run the `memory-keeper` subagent to update memory files from the current session.
 
-Передай ему:
-- `SESSION_ID` — текущей сессии (знаешь из контекста — передай, иначе пусть найдёт последний транскрипт сам)
-- `CWD` — текущая рабочая директория
-- `TRANSCRIPT_PATH` — путь к транскрипту, если известен
+Pass it:
+- `SESSION_ID` of the current session (pass it if you can tell from context, otherwise let
+  the agent find the latest transcript itself)
+- `CWD` - the current working directory
+- `TRANSCRIPT_PATH` if you know it
 
-Есть аргумент `$ARGUMENTS` — передай агенту как дополнительное указание
-(например: «запиши только решение про оплату», «не трогай RECENT, только DECISIONS»).
+If `$ARGUMENTS` is present, forward it to the agent as an extra instruction
+(for example: "only record the decision about payments", "leave RECENT alone, DECISIONS only").
 
-## Очередь необработанных сессий
+## The queue of unprocessed sessions
 
-Проверь файл `~/.claude/scripts/.pending-memory.log` (строки вида `SESSION_ID|CWD|ВРЕМЯ`).
-Если там есть записи — обработай их так:
+Check `~/.claude/scripts/.pending-memory.log` (lines look like `SESSION_ID|CWD|TIMESTAMP`).
+If it has entries, work through them as follows.
 
-### 1. Триаж до запуска агентов
+### 1. Triage before spawning any agent
 
-- **Дедуп** по паре `SESSION_ID|CWD`: одна сессия попадает в лог несколько раз.
-- **Отсев мёртвых.** Транскрипт лежит в `~/.claude/projects/<CWD с / и . заменёнными на ->/<SESSION_ID>.jsonl`.
-  Нет файла — запись не обрабатывается, сразу в удаление.
-- **Отсев служебных.** Сессии, которые сами были прогонами `/sync-memory` (первое сообщение
-  пользователя — `<command-name>/sync-memory</command-name>`), и явно пустые (крохотный
-  транскрипт, тестовые «ответь одним словом») — тоже в удаление без обработки.
+- **Deduplicate** by the `SESSION_ID|CWD` pair: one session lands in the log several times.
+- **Drop the dead ones.** A transcript lives at
+  `~/.claude/projects/<CWD with / and . replaced by ->/<SESSION_ID>.jsonl`.
+  No file, no processing - mark it for removal.
+- **Drop the service runs.** Sessions that were themselves `/sync-memory` runs (first user
+  message is `<command-name>/sync-memory</command-name>`) and obviously empty ones (a tiny
+  transcript, "answer in one word" tests) get removed without processing.
 
-### 2. Обработка: один агент на проект, а не на сессию
+### 2. Processing: one agent per project, not per session
 
-- Сгруппируй живые сессии по `CWD` и запусти **одного** `memory-keeper` на проект
-  со списком всех его сессий.
-- **Временные файлы.** В промпт каждого агента добавь требование писать промежуточные
-  файлы только в свою подпапку scratchpad (`<scratchpad>/<имя-проекта>/`): параллельные
-  агенты делят один scratchpad и перетирают файлы друг друга.
-- **Общая память — одному писателю.** В общую память (папка домашней директории) пишет
-  либо агент домашней группы сессий, либо ты сам в конце. Проектным агентам — явный запрет:
-  межпроектные находки они возвращают секцией «GLOBAL CANDIDATES», ты применяешь их после
-  завершения всех агентов, сверяясь с существующими файлами, чтобы не плодить дубли.
+- Group the live sessions by `CWD` and spawn **one** `memory-keeper` per project with the
+  full list of its sessions.
+- **Temporary files.** Tell every agent in its prompt to write intermediate files only into
+  its own scratchpad subfolder (`<scratchpad>/<project-name>/`): parallel agents share one
+  scratchpad and will overwrite each other's files.
+- **Shared memory gets a single writer.** Only the agent handling the home-directory group,
+  or you at the very end, may write to shared memory. Forbid it explicitly for the project
+  agents: they return cross-project findings under a "GLOBAL CANDIDATES" heading, and you
+  apply those after every agent has finished, checking against the existing files so
+  duplicates do not pile up.
 
-### 3. Очистка очереди
+### 3. Cleaning the queue
 
-- Перед правкой — бэкап рядом (`.pending-memory.log.bak-<дата>`).
-- Удаляй только строки из своего снимка (обработанные, мёртвые, служебные). Записи,
-  добавленные хуком во время прогона, оставь на следующий раз.
+- Back the file up next to itself first (`.pending-memory.log.bak-<date>`).
+- Remove only the lines from your own snapshot (processed, dead, service). Leave entries the
+  hook appended while you were running for next time.
 
-В конце покажи итоговый список изменений.
+Finish with a summary of everything that changed.

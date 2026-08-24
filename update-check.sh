@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Тихо смотрит, не вышла ли новая версия. Запускается фоном из SessionStart
-# раз в неделю. Результат кладет в .update-available - его печатает хук
-# при следующем старте сессии. Ничего сам не устанавливает.
+# Quietly checks whether a newer version was released. Started in the background from
+# SessionStart once a week. Writes the result to .update-available, which the hook prints
+# at the next session start. Installs nothing on its own.
 
 set -uo pipefail
 
@@ -28,7 +28,7 @@ REMOTE="$(git -C "$SRC" rev-parse '@{u}' 2>/dev/null || echo x)"
 if [ "$LOCAL" != "$REMOTE" ]; then
     BEHIND="$(git -C "$SRC" rev-list --count HEAD..'@{u}' 2>/dev/null || echo "")"
     if [ -n "$BEHIND" ] && [ "$BEHIND" -gt 0 ] 2>/dev/null; then
-        echo "вышло обновление ($BEHIND новых коммитов)" > "$FLAG"
+        echo "an update is available ($BEHIND new commits)" > "$FLAG"
     fi
 else
     rm -f "$FLAG"

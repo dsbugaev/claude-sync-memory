@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""UserPromptSubmit hook: следит за размером контекста сессии.
+"""UserPromptSubmit hook: watches how large the session context has grown.
 
-Считает реальный размер контекста по последней записи usage в транскрипте
-сессии и, когда он переваливает порог, просит модель предупредить и
-зафиксировать состояние в файлах.
+Reads the real context size from the last usage record in the session transcript and,
+once it crosses a threshold, asks the model to warn the user and to get the current
+state written into files.
 
-Пороги настраиваются через env:
-  CLAUDE_CONTEXT_WARN  (по умолчанию 250000) - мягкое предупреждение
-  CLAUDE_CONTEXT_HARD  (по умолчанию 400000) - настоятельное
-  CLAUDE_CONTEXT_STEP  (по умолчанию 100000) - шаг повторного напоминания
+Thresholds are set through the environment:
+  CLAUDE_CONTEXT_WARN  (default 250000) - gentle warning
+  CLAUDE_CONTEXT_HARD  (default 400000) - insistent one
+  CLAUDE_CONTEXT_STEP  (default 100000) - how much growth before reminding again
 """
 import json
 import os
@@ -34,7 +34,7 @@ session_id = payload.get("session_id") or "unknown"
 if not path or not os.path.exists(path):
     bail()
 
-# Транскрипт бывает на сотни мегабайт - читаем только хвост.
+# A transcript can run to hundreds of megabytes - read only the tail.
 try:
     size = os.path.getsize(path)
     with open(path, "rb") as fh:
@@ -66,7 +66,7 @@ for line in reversed(chunk.split(b"\n")):
 if used < WARN:
     bail()
 
-# Не спамим на каждый промпт: напоминаем при эскалации или росте на STEP.
+# Do not fire on every prompt: remind on escalation or after STEP more tokens.
 state_dir = os.path.join(
     os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude"), "cache"
 )
@@ -92,31 +92,32 @@ except OSError:
 k = round(used / 1000)
 if used >= HARD:
     urgency = (
-        "Контекст сессии ~%dk токенов - это уже много, качество работы падает. "
-        "ПРЕЖДЕ чем брать в работу текущий запрос, настоятельно порекомендуй "
-        "пользователю начать новую сессию." % k
+        "This session's context is ~%dk tokens - that is a lot, and answer quality "
+        "degrades from here. BEFORE you act on the current request, strongly recommend "
+        "that the user start a fresh session." % k
     )
 else:
     urgency = (
-        "Контекст сессии ~%dk токенов. Если текущая задача на естественной границе "
-        "(этап закончен, следующий шаг самостоятелен) - порекомендуй новую сессию." % k
+        "This session's context is ~%dk tokens. If the work is at a natural boundary "
+        "(a stage just finished, the next step stands on its own), suggest a fresh "
+        "session." % k
     )
 
 context = (
     "<context-budget>\n"
     + urgency
-    + "\n\nКак предупреждать (одним абзацем, в начале ответа, без паникёрства):\n"
-    "1. Назови текущий размер контекста (~%dk).\n"
-    "2. Скажи, что именно уже зафиксировано в файлах, а что живёт только в этой переписке.\n"
-    "3. Если несохранённое есть - предложи сначала запустить /sync-memory, чтобы "
-    "решения и договорённости легли в файлы памяти и новая сессия поднялась без потерь.\n"
-    "После предупреждения продолжай выполнять запрос пользователя как обычно - "
-    "решение о новой сессии за ним.\n"
+    + "\n\nHow to warn (one paragraph, at the top of your reply, no alarm):\n"
+    "1. State the current context size (~%dk).\n"
+    "2. Say what is already captured in files and what exists only in this conversation.\n"
+    "3. If anything is uncaptured, offer to run /sync-memory first, so decisions and "
+    "agreements land in the memory files and a fresh session starts with nothing lost.\n"
+    "Write the warning in the language the user is speaking. After it, carry on with "
+    "their request as usual - starting a new session is their call.\n"
     "</context-budget>" % k
 )
 
 print(json.dumps({
-    "systemMessage": "Контекст сессии: ~%dk токенов" % k,
+    "systemMessage": "Session context: ~%dk tokens" % k,
     "suppressOutput": True,
     "hookSpecificOutput": {
         "hookEventName": "UserPromptSubmit",

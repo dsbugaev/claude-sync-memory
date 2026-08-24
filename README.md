@@ -1,56 +1,54 @@
 # Claude Sync Memory
 
-> **In English:** cross-session memory for Claude Code. After a session ends it goes into
-> a queue; you run `/sync-memory`, and an agent reads the transcript and distills what is
-> worth keeping into plain Markdown files that Claude Code picks up on its own next time.
-> Ships with a context-size guard that warns you before a conversation outgrows its window.
-> Install with `bash install.sh`. Docs below are in Russian for now - translation welcome.
+Cross-session memory for Claude Code. Decisions, agreements and your preferences move out
+of the conversation and into files, and later sessions pick them up on their own.
 
-Память между сессиями Claude Code. Решения, договоренности и твои предпочтения
-переезжают из переписки в файлы, а новые сессии подхватывают их сами.
+Plus a context guard: it warns you when a conversation has outgrown its usefulness and it
+is time to start a fresh one, before answer quality slides.
 
-Плюс сторож контекста: предупреждает, когда диалог разросся и пора начинать новый,
-пока качество ответов не поехало.
+[Русская версия](README.ru.md)
 
-## Зачем это
+## Why
 
-Каждая сессия Claude Code начинается с чистого листа. Все, что вы обсудили вчера
-(какой подход выбрали, что уже пробовали и почему отказались, как ты просишь с тобой
-разговаривать), живет только внутри той переписки. Завтра в новой сессии этого нет.
+Every Claude Code session starts from a blank slate. Everything you worked out yesterday -
+which approach you picked, what you already tried and rejected, how you want to be talked
+to - lives only inside that one conversation. Tomorrow it is gone.
 
-Сессий становится много, объединить их нельзя, а тащить контекст руками лень.
+Sessions pile up, there is no way to merge them, and carrying context by hand is a chore
+nobody keeps up.
 
-Эта штука делает так: после сессии она попадает в очередь, ты запускаешь `/sync-memory`,
-и агент вычитывает переписку и раскладывает по файлам то, что стоит помнить. Файлы
-Claude Code подхватывает автоматически при старте следующей сессии в той же папке.
+This is the loop it gives you: a finished session lands in a queue, you run `/sync-memory`,
+and an agent reads the transcript and files away what is worth keeping. Claude Code loads
+those files automatically the next time you work in the same folder.
 
-## Чем это отличается от встроенной памяти Claude Code
+## How this differs from Claude Code's built-in memory
 
-У Claude Code есть своя авто-память: он пишет заметки прямо по ходу сессии в те же
-файлы `MEMORY.md` и тематические файлы рядом. Формат тот же, так что это не замена,
-а надстройка.
+Claude Code already has auto-memory: it writes notes as the session goes, into the same
+`MEMORY.md` index and topic files next to it. The format is the same, so this is not a
+replacement - it is a layer on top.
 
-Разница в моменте записи. Встроенная память решает "что запомнить" в процессе работы,
-той же моделью и тем же контекстом, который занят задачей. Здесь разбор идет после
-сессии, по полному транскрипту, отдельным агентом: видно, чем все закончилось, какие
-решения выжили, а какие отменили через полчаса. Плюс очередь, чтобы ни одна сессия не
-потерялась, и маршрутизация - что уходит в общую память, а что в `docs/` репозитория.
+The difference is when the writing happens. Built-in memory decides what to remember while
+the work is in progress, using the same model and the same context that is busy with the
+task. Here the pass happens after the session, over the full transcript, by a separate
+agent: it can see how things ended, which decisions survived and which were reversed half
+an hour later. On top of that you get the queue, so no session slips through, and routing -
+what belongs in shared memory versus the repository's `docs/`.
 
-Можно пользоваться обоими сразу, они пишут в одни и те же файлы.
+Both can run at once; they write to the same files.
 
-## Что ставится
+## What gets installed
 
-Три части, любую можно не ставить.
+Three parts, each optional.
 
-1. **Память сессий.** Команда `/sync-memory` и агент `memory-keeper`, который читает
-   транскрипт и пишет файлы. Это основа.
-2. **Очередь сессий.** Закрытая сессия записывается в очередь, а на старте новой ты
-   видишь строку "неразобранных сессий - 5". Чтобы не забывать запускать разбор.
-   Пустые сессии (открыл окно и закрыл) в очередь не попадают.
-3. **Сторож контекста.** Следит за размером диалога и на пороге просит Claude
-   предупредить тебя и предложить сначала выгрузить несохраненное в память.
+1. **Session memory.** The `/sync-memory` command and the `memory-keeper` agent that reads
+   a transcript and writes the files. This is the core.
+2. **Session queue.** A closed session is recorded in a queue, and at the start of the next
+   one you see a line like "3 unprocessed sessions" - so you do not forget to run the pass.
+   Blank sessions (window opened and closed) never reach the queue.
+3. **Context guard.** Watches the size of the conversation and, past a threshold, asks
+   Claude to warn you and offer to capture anything unsaved first.
 
-## Установка
+## Install
 
 ```bash
 git clone https://github.com/dsbugaev/claude-sync-memory.git
@@ -58,114 +56,116 @@ cd claude-sync-memory
 bash install.sh
 ```
 
-Установщик задаст несколько вопросов: что ставить, какие пороги у сторожа контекста
-(он посмотрит твои прошлые сессии и покажет, какими они выходят по размеру), нужно ли
-исключить какие-то папки, проверять ли обновления.
+The installer asks a few questions: what to install, what thresholds the context guard
+should use (it measures your past sessions and shows you how large they actually run),
+whether any folders should be excluded, and whether to check for updates.
 
-Поставить все с настройками по умолчанию, без вопросов:
+Install everything with defaults and no questions:
 
 ```bash
 bash install.sh --yes
 ```
 
-Ставь именно из клона: тогда `--update` подтянет свежую версию сам. Из скачанного
-архива все работает так же, но обновляться придется руками.
+Install from the clone: that is what lets `--update` fetch new versions for you. A
+downloaded archive works exactly the same, but updating becomes a manual job.
 
-Нужен `python3`. На macOS ставится через `xcode-select --install`.
-Установка ничего не удаляет: `settings.json` дополняется, старая версия сохраняется
-рядом как `settings.json.bak-sync-memory`.
+Requires `python3`. On macOS: `xcode-select --install`.
+Nothing is destroyed on install: `settings.json` is merged, and the previous version is
+kept alongside as `settings.json.bak-sync-memory`.
 
-После установки просто начни новую сессию Claude Code. Перезапускать приложение не нужно:
-хуки читаются при старте каждой сессии.
+Afterwards just start a new Claude Code session. No app restart: hooks are read at the
+start of every session.
 
-## Как пользоваться
+## Using it
 
-Одна команда:
+One command:
 
 ```
 /sync-memory
 ```
 
-Запускай в конце работы или когда накопилась очередь. Агент разберет текущую сессию,
-а заодно все неразобранные из очереди, и покажет список того, что записал.
+Run it when you wrap up, or when the queue has piled up. The agent processes the current
+session plus every unprocessed one in the queue, and shows you a list of what it wrote.
 
-Можно направить его точнее:
+You can aim it:
 
 ```
-/sync-memory запиши только решение про оплату
+/sync-memory only record the decision about payments
 ```
 
-## Куда он пишет
+## Where it writes
 
-**Файлы памяти** - в папку профиля Claude Code, отдельную для каждой рабочей директории:
-`~/.claude/projects/<папка>/memory/`. Один факт - один небольшой файл, рядом `MEMORY.md`
-с оглавлением. Claude Code подгружает их сам.
+**Memory files** go into the Claude Code profile, in a folder per working directory:
+`~/.claude/projects/<folder>/memory/`. One fact per small file, with `MEMORY.md` next to
+them as the index. Claude Code loads them by itself.
 
-Четыре типа: кто ты, как с тобой работать, над чем идет работа, ссылки на внешние ресурсы.
+Four types: who you are, how to work with you, what work is in flight, and pointers to
+external resources. Memory is written in the language you work in.
 
-**Документы проекта** - если работаешь в git-репозитории, агент дополнительно ведет
-`docs/STATUS.md` (где сейчас работа), `docs/DECISIONS.md` (принятые решения с обоснованием),
-`docs/GLOSSARY.md` (термины) и `docs/RECENT.md` (короткий лог сессий). Правки коммитит сам,
-пушить не будет.
+**Project docs**: when you work inside a git repository, the agent additionally keeps
+`docs/STATUS.md` (where the work stands), `docs/DECISIONS.md` (decisions with rationale),
+`docs/GLOSSARY.md` (terms) and `docs/RECENT.md` (a short session log). It commits those
+itself and never pushes.
 
-Чего он не пишет: секреты, эфемерную мелочь вроде "открыл такой-то файл", пути и имена
-функций (устаревают быстрее, чем память обновляется), и то, что и так видно в коде.
+What it will not write: secrets, ephemera like "opened such-and-such file", paths and
+function names (they go stale faster than memory refreshes), and anything already visible
+in the code.
 
-## Обновление
+## Updating
 
-Если проверка обновлений включена, раз в неделю он тихо смотрит, не вышла ли новая версия,
-и при старте сессии показывает строку с предложением обновиться. Сам ничего не ставит.
+With the update check on, once a week it quietly looks for a newer version and, at session
+start, prints a line offering to update. It never installs anything by itself.
 
 ```bash
 bash install.sh --update
 ```
 
-## Снять
+## Removing
 
 ```bash
 bash install.sh --uninstall
 ```
 
-Уберет свои хуки из настроек (чужие не тронет) и удалит свои файлы.
-Сами файлы памяти останутся - они твои.
+Takes its own hooks out of the settings (leaves everyone else's alone) and deletes its own
+files. Your memory files stay - they are yours.
 
-## Настройки
+## Settings
 
-Пороги сторожа контекста можно поменять и после установки, переменными окружения:
+The context guard thresholds can be changed after install with environment variables:
 
-| Переменная | По умолчанию | Что делает |
+| Variable | Default | What it does |
 |---|---|---|
-| `CLAUDE_CONTEXT_WARN` | 250000 | мягкое предупреждение, токенов |
-| `CLAUDE_CONTEXT_HARD` | 400000 | настойчивое предупреждение |
-| `CLAUDE_CONTEXT_STEP` | 100000 | шаг повторного напоминания, чтобы не спамил |
-| `CLAUDE_MEMORY_EXCLUDE` | пусто | папки без памяти, через двоеточие |
+| `CLAUDE_CONTEXT_WARN` | 250000 | gentle warning, in tokens |
+| `CLAUDE_CONTEXT_HARD` | 400000 | insistent warning |
+| `CLAUDE_CONTEXT_STEP` | 100000 | growth before reminding again, so it does not nag |
+| `CLAUDE_MEMORY_EXCLUDE` | empty | folders to keep no memory for, colon-separated |
 
-## Что внутри
+## What is inside
 
 ```
-commands/sync-memory.md    команда /sync-memory
-agents/memory-keeper.md    агент, который читает сессию и пишет файлы
-hooks/session-end.sh       кладет закончившуюся сессию в очередь
-hooks/session-start.sh     напоминает про очередь и обновления
-hooks/context-guard.py     сторож размера контекста
-templates/MEMORY.md        затравка оглавления памяти
-install.sh                 установка, обновление, удаление
+commands/sync-memory.md    the /sync-memory command
+agents/memory-keeper.md    the agent that reads a session and writes the files
+hooks/session-end.sh       queues a finished session
+hooks/session-start.sh     reminds about the queue and about updates
+hooks/context-guard.py     watches the context size
+templates/MEMORY.md        seed for the memory index
+install.sh                 install, update, uninstall
 ```
 
-Проверено на macOS. Под Windows нужен WSL: хуки - обычные bash-скрипты.
+Tested on macOS. On Windows it needs WSL: the hooks are ordinary bash scripts.
 
-## Частые вопросы
+## FAQ
 
-**Он будет читать мои переписки?** Транскрипты сессий и так лежат у тебя на диске,
-агент читает только их и только локально. Наружу ничего не уходит.
+**Will it read my conversations?** Session transcripts are already on your disk; the agent
+reads those and only those, locally. Nothing leaves your machine.
 
-**А если он запишет ерунду?** Файлы памяти - обычные markdown-файлы, открываются
-и правятся руками. Написал лишнее - удали строку.
+**What if it records nonsense?** Memory files are plain Markdown. Open them, delete the
+line, done.
 
-**Сколько сессий он вытянет за раз?** Очередь разбирается пачкой, по одному агенту
-на проект. Пустые и служебные сессии отсеиваются до разбора.
+**How many sessions does it handle at once?** The queue is drained in one pass, one agent
+per project. Blank and service sessions are filtered out before any of them start.
 
-**Нужно ли запускать каждый день?** Не обязательно. Очередь ждет, напоминание висит
-на старте сессий. Удобный момент - когда закончил кусок работы.
+**Do I need to run it every day?** No. The queue waits and the reminder shows up at session
+start. The natural moment is when you finish a chunk of work.
 
 MIT.

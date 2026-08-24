@@ -30,12 +30,32 @@ used in the repository.
 
 ## Where to write
 
-Claude Code keeps a folder per working directory: the `CWD` path with `/` and `.`
-replaced by `-`. The `memory/MEMORY.md` file inside that folder is loaded automatically
-when a session starts in the same directory.
+Claude Code keeps a memory folder under `~/.claude/projects/<key>/memory/`, where `<key>`
+is a path with `/` and `.` replaced by `-`. It loads `memory/MEMORY.md` from there
+automatically when a session starts.
+
+**The key is the repository root, not the working directory.** Inside a git repository every
+subdirectory and every worktree shares the repository's memory folder. Only outside a
+repository does the key come from `CWD` itself. Get this wrong and you write into a folder
+Claude Code never reads.
+
+Resolve it by looking at what exists on disk first, and only then by computing it:
 
 ```bash
-MEM_DIR="$HOME/.claude/projects/$(echo "$CWD" | sed 's/[\/.]/-/g')/memory"
+munge() { printf '%s' "$1" | sed 's/[\/.]/-/g'; }
+
+# The repository root, following a worktree back to its main repository.
+KEY="$CWD"
+if ROOT="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)"; then
+    COMMON="$(git -C "$CWD" rev-parse --git-common-dir 2>/dev/null)"
+    case "$COMMON" in /*) ROOT="$(dirname "$COMMON")" ;; esac
+    KEY="$ROOT"
+fi
+
+BASE="$HOME/.claude/projects"
+MEM_DIR="$BASE/$(munge "$KEY")/memory"
+# An existing folder wins over the computed one: it is what Claude Code actually uses.
+[ -d "$BASE/$(munge "$CWD")/memory" ] && MEM_DIR="$BASE/$(munge "$CWD")/memory"
 ```
 
 Routing rules:
@@ -43,9 +63,12 @@ Routing rules:
 ```
 CWD = home directory     -> shared memory: $MEM_DIR (visible in every session from home)
 CWD = a project folder   -> 1) project memory: $MEM_DIR
-                            2) project docs: <CWD>/docs/ - only if it is a git repository
+                            2) project docs: <repository root>/docs/ - repositories only
 CWD = a notes/vault dir  -> WRITE NOTHING (those are kept by hand)
 ```
+
+Project docs go to the repository root as well, not to the subdirectory you happened to
+start the session in.
 
 Cross-project things - preferences, working style, facts about the person - belong only
 in the shared memory at home. Do not copy project details up into shared memory.

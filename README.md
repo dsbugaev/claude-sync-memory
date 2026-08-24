@@ -10,16 +10,18 @@ is time to start a fresh one, before answer quality slides.
 
 ## Why
 
-Every Claude Code session starts from a blank slate. Everything you worked out yesterday -
-which approach you picked, what you already tried and rejected, how you want to be talked
-to - lives only inside that one conversation. Tomorrow it is gone.
+Claude Code remembers across sessions already - see the next section for how this differs.
+What it does not do is guarantee that anything got written down. Memory is produced by the
+same model that is busy with your task, mid-flight, from a conversation that has not ended
+yet. A session where the work went sideways for two hours and then landed is exactly the
+one it summarises worst, because the ending had not happened yet.
 
-Sessions pile up, there is no way to merge them, and carrying context by hand is a chore
-nobody keeps up.
+Sessions also pile up. There is no way to merge them, and nothing tells you which ones were
+never distilled.
 
-This is the loop it gives you: a finished session lands in a queue, you run `/sync-memory`,
-and an agent reads the transcript and files away what is worth keeping. Claude Code loads
-those files automatically the next time you work in the same folder.
+This is the loop this adds: a finished session lands in a queue, you run `/sync-memory`, and
+a separate agent reads the whole transcript after the fact and files away what survived.
+Claude Code loads those files the next time you work in the same repository.
 
 ## How this differs from Claude Code's built-in memory
 

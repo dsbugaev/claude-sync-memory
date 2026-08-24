@@ -106,8 +106,9 @@ external resources. Memory is written in the language you work in.
 
 **Project docs**: when you work inside a git repository, the agent additionally keeps
 `docs/STATUS.md` (where the work stands), `docs/DECISIONS.md` (decisions with rationale),
-`docs/GLOSSARY.md` (terms) and `docs/RECENT.md` (a short session log). It commits those
-itself and never pushes.
+`docs/GLOSSARY.md` (terms) and `docs/RECENT.md` (a short session log). It follows whatever
+convention the repository already uses, commits only the files it wrote by name, and never
+pushes. Your own uncommitted work is left alone.
 
 What it will not write: secrets, ephemera like "opened such-and-such file", paths and
 function names (they go stale faster than memory refreshes), and anything already visible

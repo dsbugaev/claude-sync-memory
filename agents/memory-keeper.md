@@ -21,6 +21,10 @@ write something wrong.
 No transcript in the arguments? Find it yourself:
 `ls ~/.claude/projects/*/SESSION_ID.jsonl`
 
+A transcript can mention several different `cwd` values inside it - subagents and resumed
+work leave their own. **The `CWD` you were given wins**, and the folder the transcript lives
+in confirms it. Do not re-derive the working directory from the conversation.
+
 ## Language
 
 **Write memory in the language the user speaks in the transcript**, not in English by
@@ -100,10 +104,20 @@ Types:
 (`- [Title](file.md) - hook`). Index only; content never belongs in it. Wrote a new file -
 add the line. Deleted a file - remove the line.
 
+Keep the index work to the files you touched. Pre-existing inconsistencies that have nothing
+to do with this session are not yours to fix: a sweeping rewrite of someone else's index is
+exactly the kind of change nobody asked for.
+
 ## Project docs - the `docs/` folder in the repository itself
 
 Create these only when the project is a git repository and the session actually produced
 something worth recording.
+
+**The repository's own convention outranks the layout below.** If decisions already live as
+separate files under `docs/decisions/`, add another file there rather than reviving
+`DECISIONS.md`. If `STATUS.md` is marked archived and the real status lives elsewhere, leave
+it archived. Never write the same fact into two places to satisfy a template: a split source
+of truth is worse than an unused file.
 
 - **`docs/STATUS.md`** - where the work stands, what is in flight, what is blocked. This is
   a live snapshot, not a log: overwrite stale entries instead of appending below them.
@@ -113,8 +127,11 @@ something worth recording.
   + optionally `**Alternatives**:`.
 - **`docs/GLOSSARY.md`** - terms and abbreviations that mean something specific in this
   project. Format: `**CODE** - what it means in plain words. Where it shows up.`
-- **`docs/RECENT.md`** - session log, 1-2 sentences each, newest on top. Past 20 entries,
-  drop the oldest.
+- **`docs/RECENT.md`** - session log, newest on top. Two sentences per session is the
+  default; a repository whose existing entries are longer sets the length, not this file.
+  **Rotate by size, not by entry count**: once the file passes ~40 KB, drop the oldest
+  entries until it fits. Counting entries never triggers - a real log reaches 800 lines
+  at eighteen of them.
 
 ## What NOT to record
 
@@ -125,7 +142,8 @@ something worth recording.
 - Anything already in the code, the git history, or `CLAUDE.md`.
 - Duplicates. Read the target file first - something similar may already be there.
 - Secrets: tokens, passwords, keys, other people's personal data.
-- Sessions shorter than ~3 user turns. Skip those entirely.
+- Sessions with fewer than 3 user turns. Skip those entirely. Exactly 3 is processed:
+  a single decisive turn plus follow-ups is often the most worthwhile session there is.
 
 ## Traps already stepped on
 
@@ -161,6 +179,17 @@ loose ends. Writing into a section where "not decided yet", "not done yet", or "
 sits nearby? Verify it against reality first (the filesystem, `git`) and rewrite or delete
 what expired.
 
+**The session may still be running.** You can be handed a transcript that is still growing -
+the queue is drained by hand, not only at session end. Check whether the last event is an
+unanswered question or a pending tool call, and if it is, record the state as open. A
+recommended option in a question the user has not answered is not a decision, and writing it
+down as one puts a fabricated agreement into the project's record.
+
+**A filter that reports something alarming is a filter to double-check.** A quick `grep`
+that says 90 memory files are orphaned is far more likely to be a bad pattern than a broken
+index. Check it the other way round before you act: if the inverse query comes back empty,
+your pattern is wrong, not the data.
+
 **Do not take the work date from the transcript's `mtime`.** Opening a session rewrites the
 file, so `mtime` is not when the work happened. Use the timestamps inside the `.jsonl` and
 `git log`.
@@ -168,10 +197,18 @@ file, so `mtime` is not when the work happened. Use the timestamps inside the `.
 **A new date means a new top-level entry in `RECENT.md`.** Never tuck today's work into an
 entry filed under another date: the file is read top-down and starts looking stale.
 
-**Commit changes to `docs/`.** Done writing - make a commit (`docs: sync project memory
-for session <date>`). Uncommitted edits linger in the working tree and break the next run:
-it cannot tell "already recorded" from "not recorded" and writes everything twice. Do not
-push.
+**Commit changes to `docs/`, but only the files you wrote.** Done writing - `git add` each
+path you touched by name and commit (`docs: sync project memory for session <date>`). Never
+`git add docs/` or `git add -A`: the working tree usually holds the owner's own unfinished
+edits, and sweeping those into a commit titled "sync project memory" buries someone's
+work-in-progress under a misleading message. Do not push.
+
+**Check `git status` before you edit a file, not after.** A file with uncommitted changes is
+one the owner is working in right now. Correcting a plain factual error in it is fine - say
+so in your report - but do not restructure it, and keep your commit to that one file.
+
+Uncommitted edits of your own linger and break the next run: it cannot tell "already
+recorded" from "not recorded" and writes everything twice.
 
 ## How to work
 

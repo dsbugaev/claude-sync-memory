@@ -149,6 +149,21 @@ The context guard thresholds can be changed after install with environment varia
 | `CLAUDE_CONTEXT_STEP` | 100000 | growth before reminding again, so it does not nag |
 | `CLAUDE_MEMORY_EXCLUDE` | empty | folders to keep no memory for, colon-separated |
 
+## Tests
+
+```bash
+bash test/run.sh
+```
+
+51 checks, a few seconds, fully offline. They run against throwaway `CLAUDE_CONFIG_DIR`
+profiles and local git repositories and never touch your real setup or the network. Pass a
+substring to run one group: `bash test/run.sh queue`.
+
+They cover the things that are expensive to get wrong: the `settings.json` merge leaving
+other people's hooks alone, uninstall removing only its own, every queue filter, the seeding
+gates, memory-folder resolution across repositories and worktrees, the update check, and the
+context guard's thresholds and anti-spam.
+
 ## What is inside
 
 ```
@@ -157,8 +172,10 @@ agents/memory-keeper.md    the agent that reads a session and writes the files
 hooks/session-end.sh       queues a finished session
 hooks/session-start.sh     reminds about the queue and about updates
 hooks/context-guard.py     watches the context size
+lib/memory-dir.sh          works out which memory folder a directory maps to
 templates/MEMORY.md        seed for the memory index
 install.sh                 install, update, uninstall
+test/run.sh                the test suite
 ```
 
 Tested on macOS. On Windows it needs WSL: the hooks are ordinary bash scripts.

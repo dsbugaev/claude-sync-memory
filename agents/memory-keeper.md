@@ -43,24 +43,17 @@ subdirectory and every worktree shares the repository's memory folder. Only outs
 repository does the key come from `CWD` itself. Get this wrong and you write into a folder
 Claude Code never reads.
 
-Resolve it by looking at what exists on disk first, and only then by computing it:
+Do not work this out by hand - a helper ships with the package and is covered by tests:
 
 ```bash
-munge() { printf '%s' "$1" | sed 's/[\/.]/-/g'; }
-
-# The repository root, following a worktree back to its main repository.
-KEY="$CWD"
-if ROOT="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)"; then
-    COMMON="$(git -C "$CWD" rev-parse --git-common-dir 2>/dev/null)"
-    case "$COMMON" in /*) ROOT="$(dirname "$COMMON")" ;; esac
-    KEY="$ROOT"
-fi
-
-BASE="$HOME/.claude/projects"
-MEM_DIR="$BASE/$(munge "$KEY")/memory"
-# An existing folder wins over the computed one: it is what Claude Code actually uses.
-[ -d "$BASE/$(munge "$CWD")/memory" ] && MEM_DIR="$BASE/$(munge "$CWD")/memory"
+MEM_DIR="$(bash "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sync-memory/src/lib/memory-dir.sh" "$CWD")"
 ```
+
+If that file is missing, fall back to computing it: take `git -C "$CWD" rev-parse --show-toplevel`
+(following `--git-common-dir` back to the main repository when you are in a worktree), fall back
+to `CWD` outside a repository, replace `/` and `.` with `-`, and look under
+`~/.claude/projects/<that>/memory`. A folder that already exists wins over the computed one.
+
 
 Routing rules:
 

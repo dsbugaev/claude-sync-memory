@@ -62,6 +62,12 @@ The installer asks a few questions: what to install, what thresholds the context
 should use (it measures your past sessions and shows you how large they actually run),
 whether any folders should be excluded, and whether to check for updates.
 
+At the end it offers to queue your most substantial recent sessions. Take it: on a fresh
+install the queue is empty, so a first `/sync-memory` would find only the session you just
+opened and write nothing at all - which reads exactly like a broken tool. With a few real
+sessions queued, the first run produces something you can judge. It only happens on the
+first install; updates never queue work behind your back.
+
 Install everything with defaults and no questions:
 
 ```bash

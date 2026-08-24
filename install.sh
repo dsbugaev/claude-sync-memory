@@ -30,7 +30,7 @@ DO_GUARD=1
 DO_UPDATES=1
 WARN=250000
 HARD=400000
-EXCLUDE=""
+EXCLUDE="${CLAUDE_MEMORY_EXCLUDE:-}"
 
 b() { printf '\033[1m%s\033[0m\n' "$*"; }
 dim() { printf '\033[2m%s\033[0m\n' "$*"; }
@@ -108,6 +108,10 @@ esac
 NONINTERACTIVE=0
 [ "${1:-}" = "--yes" ] && NONINTERACTIVE=1
 [ -t 0 ] || NONINTERACTIVE=1
+
+# Seeding is a first-install step. An update must not quietly queue more work.
+FIRST_INSTALL=1
+[ -f "$CONFIG" ] && FIRST_INSTALL=0
 
 # Reinstall after an update - pick up the previous answers.
 if [ -f "$CONFIG" ]; then
@@ -215,7 +219,7 @@ PY
   echo
 fi
 
-if [ "$DO_QUEUE" = "1" ] && [ "$NONINTERACTIVE" != "1" ]; then
+if [ "$DO_MEMORY" = "1" ] && [ "$NONINTERACTIVE" != "1" ]; then
   b "3. Excluded folders"
   dim "Any folders to keep no memory for (private notes, other people's repositories)?"
   dim "Colon-separated, wildcards allowed. Example: \$HOME/notes/*:\$HOME/secret*"
@@ -343,6 +347,97 @@ else
   rm -f "$HOME_DIR/.update-available" "$HOME_DIR/.last-update-check"
 fi
 
+# ------------------------------------------------------- seed the first run ---
+# A fresh install has an empty queue, so the first /sync-memory finds only the session
+# that was just opened and writes nothing. The user concludes it does not work. Seeding
+# the queue with a few substantial past sessions gives that first run something real.
+if [ "$DO_MEMORY" = "1" ] && [ "$FIRST_INSTALL" = "1" ]; then
+  CANDIDATES="$(python3 - "$CLAUDE_DIR" 3 "$EXCLUDE" <<'SEEDPY'
+import fnmatch, glob, json, os, sys
+
+claude_dir, want, exclude = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+patterns = [p for p in exclude.split(":") if p]
+
+queued = set()
+try:
+    for line in open(os.path.join(claude_dir, "scripts", ".pending-memory.log"), encoding="utf-8"):
+        parts = line.strip().split("|")
+        if len(parts) >= 2:
+            queued.add((parts[0], parts[1]))
+except OSError:
+    pass
+
+files = glob.glob(os.path.join(claude_dir, "projects", "*", "*.jsonl"))
+files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+
+found = []
+for path in files[:60]:
+    sid = os.path.basename(path)[:-6]
+    try:
+        with open(path, "rb") as fh:
+            if b"<command-name>/sync-memory" in fh.read(20000):
+                continue
+            fh.seek(0)
+            raw = fh.read(3000000)
+    except OSError:
+        continue
+
+    cwd, turns, stamp = "", 0, ""
+    for line in raw.split(b"\n"):
+        if not cwd and b'"cwd"' in line:
+            try:
+                cwd = json.loads(line).get("cwd") or ""
+            except Exception:
+                pass
+        if b'"type":"user"' not in line or b"tool_result" in line or b'"isSidechain":true' in line:
+            continue
+        turns += 1
+        if not stamp:
+            try:
+                stamp = (json.loads(line).get("timestamp") or "")[:10]
+            except Exception:
+                pass
+
+    # Three turns is the same bar the agent uses to bother with a session at all.
+    if turns < 3 or not cwd:
+        continue
+    if cwd.startswith(claude_dir) or any(fnmatch.fnmatch(cwd, pat) for pat in patterns):
+        continue
+    if (sid, cwd) in queued:
+        continue
+    found.append((turns, sid, cwd, stamp))
+
+found.sort(reverse=True)
+for turns, sid, cwd, stamp in found[:want]:
+    print("%s|%s|%s|%s" % (sid, cwd, stamp, turns))
+SEEDPY
+)"
+
+  if [ -n "$CANDIDATES" ]; then
+    echo
+    b "First run"
+    dim "Nothing is queued yet, so a first /sync-memory would have nothing to chew on."
+    dim "These past sessions look substantial enough to be worth distilling:"
+    while IFS='|' read -r sid cwd stamp turns; do
+      [ -z "$sid" ] && continue
+      printf '    %-11s %-3s turns  %s\n' "${stamp:-?}" "$turns" "$cwd"
+    done <<< "$CANDIDATES"
+    dim "Processing them costs tokens, the same as any other work you ask Claude to do."
+    if ask "Queue them, so your first /sync-memory has real material?" y; then
+      mkdir -p "$CLAUDE_DIR/scripts"
+      while IFS='|' read -r sid cwd stamp turns; do
+        [ -z "$sid" ] && continue
+        printf '%s|%s|%s\n' "$sid" "$cwd" "$(date +%Y-%m-%dT%H:%M:%S)" >> "$CLAUDE_DIR/scripts/.pending-memory.log"
+      done <<< "$CANDIDATES"
+      SEEDED="$(printf '%s\n' "$CANDIDATES" | grep -c . || true)"
+      ok "queued $SEEDED session(s)"
+    else
+      SEEDED=0
+      dim "  skipped - sessions you close from now on will queue themselves"
+    fi
+  fi
+fi
+
 # --------------------------------------------------------------- self-check ---
 echo
 b "Checking"
@@ -368,8 +463,16 @@ echo
 b "Done."
 dim "Start a new Claude Code session - hooks load at session start, no app restart needed."
 echo
-echo "  How to use it:"
-echo "    /sync-memory   - process the session and write it into memory"
+if [ "${SEEDED:-0}" -gt 0 ] 2>/dev/null; then
+  echo "  Your first run - do it now, it takes a minute:"
+  echo "    1. start a new Claude Code session (any folder)"
+  echo "    2. run /sync-memory"
+  echo
+  echo "  It works through the $SEEDED queued session(s) and shows you what it wrote."
+else
+  echo "  How to use it:"
+  echo "    /sync-memory   - process the session and write it into memory"
+fi
 echo
 echo "  Update:     bash $HOME_DIR/src/install.sh --update"
 echo "  Uninstall:  bash $HOME_DIR/src/install.sh --uninstall"
